@@ -480,37 +480,352 @@ Schutz vor Übertragungsfehlern + Manipulation
 - Standardisierte Algorithmen
   - HMAC (Hash-based Message Authentication Code)
 
-## Grundbausteine, Tag 1
+## Schlüsselaustausch
+
+```
+Alice <-------------> Bob
+  ^              --->
+  |        /----/
+  v  <----/
+ Eve                 Mallory
+```
+
+
+- Schlüsselzahl nach Personen
+  - 2 Personen: 1 Schlüssel
+  - 3 Personen: 3 Schlüssel (+2)
+  - 4 Personen: 6 Schlüssel (+3)
+  - 5 Personen: 10 Schlüssel (+4)
+
+- Berechnen
+  - n Personen: 1 + 2 + 3 + 4 + ... + n-1
+  - Allgemeine Summenformel
+    - Summe(1...n) = n * (n+1) / 2
+  - n Personen: Summe(1...n-1) = (n-1) * n / 2
+  - ZB für 17 Personen: 16 * 17 / 2 = 136 (!) Schlüssel
+
+- Aufwand für den Schlüsselaustausch und auch Anzahl der Schlüssel steigt ungefähr quadratisch mit der Anzahl der Personen
+
+- Ziele
+  - Weniger Schlüssel
+  - Effizienter ad-hoc-Austausch von Schlüsseln
+
+## Asymmetrische Verschlüsselung
+
+- Ablauf
+  - Bob kauft ein Vorhängeschloss (inklusive Schlüssel)
+  - Alice fordert von Bob ein Vorhängeschloss an
+  - Alice verfasst Nachricht, packt die Nachricht in eine Kiste und verschließt die Kiste mit dem Vorhängeschloss
+  - Alice schickt die Kiste an Bob
+  - Bob öffnet die Kiste mit dem Vorhängeschloss
+- Komponenten
+  - Bauplan für Schlösser (Algorithmus)
+  - Schlüssel (privat)
+  - Schloss (öffentlich)
+
+## RSA
+
+- Algorithmus (Ron Rivest, Adi Shamir, Leonard Adleman)
+- Unternehmen (RSA Security)
+
+- Ablauf des Algorithmus
+  - Zwei Primzahlen wählen: `p` und `q`
+  - Modulus `N`berechnen: `N = p * q`
+  - Phi-Funktion (von Euler): `phi(N) = (p-1) * (q-1)`
+  - Zahl `e` wählen, so dass sie teilerfremd zu `phi(N)` ist
+  - Verschlüsseln: `c = m^e mod N` (m = message, c = ciphertext)
+  - Entschlüsseln: `m = c^d mod N` (d = private key)
+  - `d` berechnen
+    - `d` muss zu `e` passen: `d` und `e` müssen sich gegenseitig aufheben
+    - Das heißt, `d * e = 1 mod phi(N)`
+    - Sicherheit von RSA basiert auf der Schwierigkeit, phi(N) zu berechnen, ohne p und q zu kennen (und die wiederum sind schwer zu berechnen, da die Faktorisierung von N schwierig ist)
+  - Erweiterter Euklidischen Algorithmus
+
+- Beispiel
+  - Bob bereitet vor
+    - `p = 7` und `q = 11` (geheim)
+    - `N = 7 * 11 = 77`
+    - `phi(N) = (7-1) * (11-1) = 6 * 10 = 60`
+    - `e = 13`
+    - Öffentliche Schlüssel ist `(N, e)` = `(77, 13)`
+  - Alice (oder sonstjemand) verschlüsselt mit den öffentlichen Zahlen von Bob
+    - `m = 42` => 42 ^ 13 mod 77 = 14 => `c`
+    - Zwischenergebnis: Nachricht `m = 42` ergibt Geheimtext `c = 14`
+  - Bob berechnet seinen privaten Schlüssel `d`
+    - Gegeben: phi(N) = 60, e = 13
+    - Euklid:
+
+```
+phi(N)    e
+ |        |
+ v        v
+60 = 4 * 13 + 8
+         ^    ^
+  /-----/  /-/
+ v        v
+13 = 1 * 8 + 5
+         ^   ^
+  /-----/ /-/
+ v       v
+ 8 = 1 * 5 + 3
+ 5 = 1 * 3 + 2
+ 3 = 1 * 2 + 1
+ 2 = 2 * 1 + 0 (die letzte Zeile ignorieren wir)
+
+
+ 1 = 3 - 1 * 2 (vorletzte Zeile, aufgelöst zum Rest)
+ 1 = 3 - 1 * (5 - 1 * 3)
+ 1 = 2 * 3 - 1 * 5
+ 1 = 2 * (8 - 1 * 5) - 1 * 5
+ 1 = 2 * 8 - 3 * 5
+ 1 = 2 * 8 - 3 * (13 - 1 * 8)
+ 1 = 5 * 8 - 3 * 13
+ 1 = 5 * (60 - 4 * 13) - 3 * 13
+ 1 = 5 * 60 - 23 * 13
+          ^         ^
+          |         |
+        phi(N)      e
+
+ d = -23
+```
+
+    - c = 14, d = -23 (=37 (mod phi(N))), N = 77
+    - m = c^d mod N
+    - m = 14^37 mod 77 => 42
+
+- Vorteile von RSA
+  - Deutlich weniger Schlüssel werden benötigt
+  - Schlüsselaustausch kann öffentlich erfolgen
+- Nachteile von RSA
+  - Sehr langsam (~ Faktor 10.000 langsamer als AES)
+  - Nachrichtenlänge drastisch begrenzt (durch Schlüssellänge)
+  - Schlüssel sind sehr lang (1024 Bit, 2048 Bit, 4096 Bit)
+  - Primfaktorzerlegung ist nicht mehr so unlösbar wie sie das mal war
+
+## Digitale Signaturen
+
+```
+m = (m ^ e mod N) ^ d mod N = m ^ e*d mod N
+                            = m ^ d*e mod N
+```
+
+- Erkenntnis
+  - Man kann mit öffentlichem Schlüssel verschlüsseln und mit privatem entschlüsseln
+  - Man kann mit privatem Schlüssel verschlüsseln und mit öffentlichem entschlüsseln
+
+```
+Alice -> m -> prvA(m) -> signedM -> pubB(signedM) -> encryptM -> Bob
+
+Bob -> encryptM -> prvB(encryptM) -> signedM -> pubA(signedM) -> m
+```
+
+- Digitale Signaturen funktionieren haargenau so wie asymmetrische Verschlüsselung, es werden lediglich die Rollen von dem öffentlichen und dem privaten Schlüssel vertauscht
+
+## Hybrid-Verfahren
+
+```
+Alice -> m
+      -> erfindet zufälligen AES-Schlüssel
+      -> AES(m, aesKey)
+      -> SHA256(m)
+      -> RSA(hash, privateKey(Alice))
+      -> RSA(aesKey, publicKey(Bob))
+```
+
+- Eigentliche Nachricht effizient mit AES und Zufallsschlüssel verschlüsseln
+- AES-Schlüssel und Hash mit RSA signieren und verschlüsseln
+  - Das kann man n Mal parallel machen, um eine Nachricht zB an verschiedene Empfänger:innen gleichzeitig zu verschicken
+
+## Elliptische Kurven (EC)
+
+- ECC = Elliptic Curve Cryptography
+
+```
+Lineare Funktionen:
+  y = m * x + b
+
+Quadratische Funktionen:
+  y = a*x^2 + b*x + c
+
+Kubische Funktionen:
+  y = a*x^3 + b*x^2 + c*x + d
+
+Elliptische Kurven:
+  y^2 = x^3 + a*x + b         | sqrt()
+  y   = sqrt(x^3 + a*x + b)   => 2 (!) Lösungen, ein positives und ein negatives
+
+```
+
+- Form der elliptischen Kurve hängt im Wesentlichen von den Koeffizienten a und b ab
+
+- Vorgehen
+  - Alice wählt einen Startpunkt `P` auf der Kurve
+  - Alice überlegt sich einen geheimen Faktor `a`
+  - Alice konstruiert einen Punkt `a*P`
+  - Dieser Punkt hat eine X-Koordinate, diese nennen wir `A`
+    - `A` ist der öffentliche Schlüssel von Alice
+    - `a` ist der private Schlüssel von Alice
+  - Bob macht das gleiche (vom gleichen Punkt `P` ausgehend)
+  - Bob überlegt sich einen geheimen Faktor `b``
+  - Bob konstruiert einen Punkt `b*P`
+  - Dieser Punkt hat eine X-Koordinate, diese nennen wir `B`
+    - `B` ist der öffentliche Schlüssel von Bob
+    - `b` ist der private Schlüssel von Bob
+  - Gemeinsamer Schlüssel
+    - `a * b * P`
+    - Das ist für Alice leicht: `a * B` = `a * (b * P)`
+    - Das ist für Bob leicht:   `b * A` = `b * (a * P)`
+  - Für Eve
+    - Eve kann den gemeinsamen Schlüssel nicht (effizient) berechnen
+    - Dafür bräuchte sie `a` und `b`
+  - Das ist ECDH: Elliptic-Curve Diffie-Hellman
+
+```
+227P = P + P + P + P + ... + P    (227 Mal)
+227P = 128P + 64P + 32P + 2P + 1P (deutlich weniger Aufwand)
+```
+
+## Grundbausteine
 
 - Symmetrische Verschlüsselung
-  - Monoalphabetische Verfahren
-    - Cäsar
-    - ROT13
-    - Erweiterter Cäsar
-  - Polyalphabetische Verfahren
-    - Vigenère
-    - Zodiac
+  - Monoalphabetische Verfahren (Cäsar, ROT13, Erweiterter Cäsar)
+  - Polyalphabetische Verfahren (Vigenère, Zodiac)
   - One-Time Pad
-  - Block-basierte Verfahren
-    - AES (CBC, ECB)
+  - Block-basierte Verfahren (AES-CBC, AES-ECB)
+- Asymmetrische Verschlüsselung
+  - RSA, Elliptische Kurven
+  - Digitale Signaturen
 - Zufallszahlengeneratoren
-- Schlüsselaustausch
-  - Diffie-Hellman
-- Hash-Funktionen
-  - SHA2
-- MACs
-  - HMAC
-- Passwörter speichern
-  - pbkdf2
-  - bcrypt
-  - scrypt
+- Schlüsselaustausch (Diffie-Hellman, ECDH)
+- Hash-Funktionen (SHA2-Familie)
+- MAC (HMAC)
+- Passwörter speichern (pbkdf2, bcrypt, scrypt)
+
+## HTTPS
+
+- HTTPS = HTTP over TLS
+  - TLS = Transport Layer Security
+  - SSL = Secure Sockets Layer (alter Name für TLS)
+- Zwei Zielsetzungen
+  - Verbindung soll verschlüsselt sein (Vertraulichkeit)
+  - Verbindung soll authentifiziert sein (Authentifikation)
+    - Man in the Middle (MITM) Angriffe vermeiden / verhindern
+
+```
+Client (vkb.de) -----------------> Server (vkb.de)
+- RootCA-Zertifikat                 - Private Key
+                                    - Zertifikat
+                                      - Public Key
+                                      - Domain: vkb.de
+                                      - Gültig bis: 11/2023
+                                      - CA: CA#1
+                                      - CA-Zertifikat:
+                                        - Public Key
+                                        - Domain: ca1.com
+                                        - Gültig bis: 11/2027
+                                        - CA: CA#2
+                                        - CA-Zertifikat:
+                                          - Public Key
+                                          - Domain: ca2.com
+                                          - Gültig bis: 11/2032
+                                          - CA: RootCA
+                                          - CA-Zertifikat:
+                                            - Public Key
+                                            - Domain: rootca.com
+                                            - CA: RootCA
+                                            - Digitale Signatur
+                                          - Digitale Signatur
+                                        - Digitale Signatur
+                                      - Digitale Signatur <-----+
+                                                                |
+                                   Certificate Authority (CA#1) |
+                                   - Private Key ---------------+
+                                   - Zertifikat
+                                     - Public Key
+                                     - Domain: ca1.com
+                                     - Gültig bis: 11/2027
+                                     - CA: CA#2
+                                     - Digitale Signatur <-------+
+                                                                 |
+                                   Certificate Authority (CA#2)  |
+                                   - Private Key ----------------+
+                                   - Zertifikat
+                                     - Public Key
+                                     - Domain: ca2.com
+                                     - Gültig bis: 11/2032
+                                     - CA: RootCA
+                                     - Digitale Signatur <-------+
+                                                                 |
+                                   Root Certificate Authority    |
+                                   - Private Key ----------------+
+                                   - Zertifikat
+                                     - Public Key
+                                     - Domain: rootca.com
+                                     - CA: RootCA
+                                     - Digitale Signatur
+```
+
+- Für die lokale Entwicklung
+  - Zertifikat für `localhost` benötigt
+  - Zertifikat für `staging.vkb-internal.local`
+- Ein Zertifikat anfordern
+  - Private Key erstellen
+  - Public Key erstellen
+  - Bestellformular für Zertifikat ausstellen (Certificate Signing Request (CSR))
+    - Public Key
+    - Metadaten (Domain, Inhaber, …)
+  - Optionen
+    - CSR an CA schicken, Geld bezahlen, warten, Zertifikat bekommen :-)
+    - CSR selbst in ein Zertifikat umwandeln und selbst unterschreiben
+      - Self-Signed Certificate
+        - Technisch ist das ein legitimes Zertifikat
+        - Aber es wird nicht als vertrauenswürdig eingestuft
+
+## Partial Keys
+
+- Man hat ein Secret
+  - Möchte aber, dass mehrere Personen den Vorgang gemeinsam freischalten müssen
+  - Man braucht mehr als 1 Passwort, man hat also N Passwörter
+  - Aber man braucht nicht alle N Passwörter, um den Vorgang freizuschalten
+
+- Konzeptionell
+
+```
+Passwort: secret
+
+# Personen:            3
+# Passwörter benötigt: 2
+
+s _ c r _ t     _ e c _ e t     s e _ r e _
+    #1               #2              #3
+```
+
+- Mathematisch
+  - Secret: `Y`
+  - Öffentlich: `X`
+
+- Lineare Funktion (<- wenn zwei Personen genügen sollen)
+  - y = m*x + b
+  - Kann durch zwei Punkte genau bestimmt werden
+  - Ich brauche mindestens zwei Punkte => wenn jede Person einen Punkt kennt, genügen zwei Personen
+
+- Quadratische Funktion (<- wenn drei Personen genügen sollen)
+  - y = a*x^2 + b*x + c
+  - Kann durch drei Punkte genau bestimmt werden
+  - Ich brauche mindestens drei Punkte => wenn jede Person einen Punkt kennt, genügen drei Personen
+
+- Allgemein
+  - Wenn n Personen genügen sollen, braucht man ein Polynom vom Grad n-1
+
+- Algorithmus dafür
+  - Von Adi Shamir
+  - "Shamir's Secret Sharing"
+
+## Links
+
+- [Crypto 101](https://www.crypto101.io/)
 
 ## Fragen für morgen (und die weiteren Tage ;-))
 
-- Wie wird ein RSA-Schlüssel berechnet?
-- Was sind Alternativen?
-  - Elliptische Kurven (ECC)
-- Warum wird RSA immer noch eingesetzt?
-- Wie funktionieren Cool Wallets / Partial Keys / Key Recovery?
 - Digitale Souveränität / Self Custody
 - Wie geht man mit kompromittierten Schlüsseln um?
