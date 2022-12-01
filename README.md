@@ -829,3 +829,301 @@ s _ c r _ t     _ e c _ e t     s e _ r e _
 
 - Digitale Souveränität / Self Custody
 - Wie geht man mit kompromittierten Schlüsseln um?
+
+
+## OAuth 2.0
+
+- Authorisierungsframework
+- Outsourced, _was_ ein user tun darf
+- eine sammlung von Spezifikationen
+- Outsourcen sorgt dafür
+  - dass Unternehmen mit mehr Expertise die security machen => geringeres Risiko eines Datenleaks
+  - gibt juristische Sicherheit => Vertrag mit einem Securityanbieter
+
+### Begriff
+
+- Client
+  - third-party Anwendung, die auf Daten zugreifen möchte
+- Resource Owner
+  - juristische person, die zugriff auf daten, die ihr gehören, erteilen kann
+- OAuth Provider == Authorization Server
+  - gibt auf anweisung des Resource Owners zugriffsrechte an Client raus
+- Resource Server
+  - verwaltet daten und gibt diese an authorisierte Clients raus
+
+### Der Authorisierungsprozess
+
+- Ich möchte eine Anwendung benutzen, die meine Daten verarbeitet
+- Ich starte die Anwendung
+- Die Anwendung leitet mich weiter zu meinem OAuth Provider
+- OAuth Provider fragt mich, ob die Anwendung auf meine Daten zugreifen darf
+  - dazu muss ich mich gegebenenfalls beim OAuth Provider einloggen
+  - _wie genau_ der OAuth provider das tut, ist ihm überlassen
+    - es _kann_ authentifizierung sein
+    - es kann aber auch sein, dass ein user nur im selben netzwerk sein muss o.ä.
+    - die authorisierung sagt nichts über die identität des Resource Owners aus
+- Ich sage zu, dass die Anwendung auf meine Daten zugreifen darf
+- Der OAuth Provider leitet mich zurück zur Anwendung (mit security details)
+- Die Anwendung hat jetzt die Möglichkeit, meine Daten abzufragen
+- Die Anwendung schickt eine Anfrage an einen Resource Server und kriegt meine Daten
+
+### Vorbedingungen für OAuth
+
+- ALLES ÜBER HTTPS
+- Der Client (die third-party Anwendung) muss beim Authorization Server regstriert werden
+  - Client ID
+  - Client Secret
+  - Redirect URI (z.B. https://meinecoolephotobearbeitungsapp.com/cb)
+
+### Authorization Code Flow
+
+- Der Client erstellt einen "Log In"-Link, der den Resource Owner zum Authorization Server weiterleitet
+```
+https://authorization-server.com/auth?
+	response_type=code&
+	client_id=CLIENT_ID&
+	redirect_uri=REDIRECT_URI&
+	scope=photos&
+	state=1234zyx
+```
+- Der Authorization Server fragt den Resource Owner (also den User, der vor dem PC sitzt), ob die Client auf die angegebenen Scopes zugreifen darf
+- Der Authorization Server leitet den Resource Owner zurück zur Anwendung und schickt einen Authorization Code mit
+```
+https://meinecoolephotobearbeitungsapp.com/cb?
+	code=AUTH_CODE_HERE&
+	state=1234zyx
+```
+- Der Client verifiziert, dass der `state` query parameter identisch zu dem ist, den er ursprünglich abgeschickt hat (eher eine nonce)
+- Der Client schickt einen POST request an den Token Endpoints des Authorization Servers und schickt den Authorization Code mit
+```
+POST https://authorization-server.com/token
+	grant_type=authorization_code&
+  code=AUTH_CODE_HERE&
+  redirect_uri=REDIRECT_URI&
+  client_id=CLIENT_ID&
+  client_secret=CLIENT_SECRET
+```
+- Der Authorization Server antwortet mit einem Access Token und einer Expiration Time
+```
+{
+  "access_token":"2YotnFZFEjr1zCsicMWpAA",
+  "expires_in":3600,
+  "refresh_token":"tGzv3JOkF0XG5Qx2TlKWIA"
+}
+```
+- Der Client kann jetzt Requests an Resource Server schicken
+```
+POST https://resource-server.com/some-data
+HEADER Authorization: Bearer ...
+```
+
+### Refresh Codes
+
+- Der Client schickt einen Refresh Request an den Token Endpoint
+```
+POST https://authorization-server.com/token
+  grant_type=refresh_token&
+  refresh_token=tGzv3JOkF0XG5Qx2TlKWIA
+```
+- Der Authorization Server antwort mit einem neuen Access Token und Refresh Token
+```
+{
+  "access_token":"...",
+  "expires_in":3600,
+  "refresh_token":"..."
+}
+```
+
+### Implicit Flow
+
+- Der Authorization Request gibt beim Redirect zurück zum Client direkt ein Access Token mit
+- Sollte nicht verwendet werden, da es weniger sicher ist als die folgende Erweiterung für SPAs und Mobile Apps
+
+### Erweiterung des Authorization Code Flow für Single-Page-Applications und Mobile Apps
+
+- SPAs & Mobile Apps können keinen Secrets bewahren
+
+- Der Client erstellt einen "Log In"-Link, der den Resource Owner zum Authorization Server weiterleitet, und hängt dabei ein generiertes Secret an, das einmalig verwendet wird
+  - Dazu generiert der Client einen random String, genannt der Code Verifier, 43-128 characters lang
+  - Dann hashed der Client diesen random String und encoded ihn URL-Safe (base64) => Code Challenge
+```
+https://authorization-server.com/auth?
+	response_type=code&
+	client_id=CLIENT_ID&
+	redirect_uri=REDIRECT_URI&
+	scope=photos&
+	state=1234zyx&
+  code_challenge=...&
+  code_challenge_method=S256
+```
+- Der Authorization Server merkt sich die Code Challenge im Hintergrund
+- Der Authorization Server fragt den Resource Owner (also den User, der vor dem PC sitzt), ob die Client auf die angegebenen Scopes zugreifen darf
+- Der Authorization Server leitet den Resource Owner zurück zur Anwendung und schickt einen Authorization Code mit
+```
+https://meinecoolephotobearbeitungsapp.com/cb?
+	code=AUTH_CODE_HERE&
+	state=1234zyx
+```
+- Der Client schickt einen POST request an den Token Endpoints des Authorization Servers und schickt den Authorization Code mit
+```
+POST https://authorization-server.com/token
+	grant_type=authorization_code&
+  code=AUTH_CODE_HERE&
+  redirect_uri=REDIRECT_URI&
+  client_id=CLIENT_ID&
+  code_verifier=...
+```
+- Der Authorization Server wendet den Algorithmus aus der `code_challenge_method` um den Code Verifier mit der Code Challenge zu vergleichen
+- Der Authorization Server antwortet mit einem Access Token und einer Expiration Time
+```
+{
+  "access_token":"2YotnFZFEjr1zCsicMWpAA",
+  "expires_in":3600,
+  "refresh_token":"tGzv3JOkF0XG5Qx2TlKWIA"
+}
+```
+- Der Client kann jetzt Requests an Resource Server schicken
+```
+POST https://resource-server.com/some-data
+HEADER Authorization: Bearer ...
+```
+
+### Praktische Probleme
+
+- Registration von Clients ist nicht standardisiert
+  - Austausch des Client Secrets ist nicht standardisiert
+  - Kein Problem für die Security, aber nervig für Ops
+- Oft erwarten Authorization Provider zusätzliche Dinge über den Spec hinaus
+  - Man braucht eine Implementation pro OAuth Provider, um alles abzudecken
+  - Führt natürlich zu Overhead in der Implementation
+  - Das Problem hat man nicht, wenn man einen zentralen Authorization Provider verwendet
+    - Das ist in der Praxis meist der Fall, weil man ein Set von Nutzern (Angestellte, Kund:innen) an einer Stelle verwalten möchte
+    - Man sollte für getrennte Nutzerbasen möglichst die selbe Software für den Authorization Provider benutzen, um nicht mehrere verschiedene Integrationen entwickeln zu müssen
+- Es ist nicht standardisiert, wie der Authorization Server den Authorization Request validiert
+  - Es gibt z.B. nicht-standard protokolle (meineapp://...)
+  - Manche Authorization Server verbieten Requests an localhost
+  - Die Validierung der Redirect URI ist manchmal ein ===, manchmal ein glob/regex
+  - Clients stecken oft zusätzliche Parameter in Redirect URIs, die von Authorization Servern dann als Problem angesehen werden
+- `state` query parameter
+  - kann verwendet werden, um informationen mitzugeben, die nach dem redirect wieder verwendet werden können
+    - muss gegen umschreiben abgesichert werden, falls man das tut
+    - macht die redirect URI lang, was ggfs zu Problemen mit Proxies führen kann
+- Wenn ein Client mit verschiedenen Authorization Servern funktionieren soll, führt das zu Problemen
+  - Nicht alle Authorization Server verwenden die selben Scopes, selbst wenn es um die selben daten geht
+
+### Client Credentials Flow
+
+- Manchmal möchte ein Client Daten von einem Resource Server holen, die nicht user-spezifisch sind
+  - z.B. Statistiken, Metadaten
+  - oder Client-spezifische Daten wie OAuth2-Logo oder Website URL
+- Dazu gibt es den Client Credentials Flow, der keinen Resource Owner involviert
+
+- Der Client schickt einen Access Token Request an den Token Endpoint
+```
+POST https://authorization-server.com/token
+  grant_type=client_credentials&
+  client_id=CLIENT_ID&
+  client_secret=CLIENT_SECRET
+```
+```
+POST https://authorization-server.com/token
+HEADER Authorization: Basic ... (base64 clientid:clientsecret)
+  grant_type=client_credentials&
+```
+- Der Authorization Server schickt eine Access Token Response zurück
+```
+{
+  "access_token":"2YotnFZFEjr1zCsicMWpAA",
+  "expires_in":3600
+}
+```
+
+### Resource Owner Password Credentials Grant
+
+- User können sich auch direkt per login und passwort über OAuth 2 authorisieren, um ein Access Token zu erhalten
+- Das ist für Anwendungsentwicklung praktisch nie notwendig
+- Sollte immer abgewiesen werden, da es notwendigerweise benötigt, dass der Client das Passwort des Users bekommt
+  - User sollten nie third-party apps ihr passwort geben, daher ist dieser Grant Type für Clients meist irrelevant
+
+### Device Authorization Grant
+
+https://www.rfc-editor.org/rfc/rfc8628
+
+## JSON Web Tokens
+
+- Portables Stück Daten, das signiert wird, um die Wahrheit des Inhaltes zu garantieren
+- ein JWT macht Aussagen über (meist) ein Individuum und behauptet Dinge über diese Person
+- Besteht aus einem Header, einer Payload und einer Signatur
+
+```
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c
+```
+
+- Die Daten in einem JWT sind immer lesbar
+
+### Erzeugen eines EC keypairs für unser Codebeispiel
+
+- `openssl ecparam -genkey -name prime256v1 -noout -out ec256-ec.pem`
+- `openssl pkcs8 -topk8 -in ec256-ec.pem -out ec256-priv.pem -nocrypt`
+- `openssl ec -in ec256-priv.pem -pubout > ec256-pub.pem`
+
+## OpenID Connect
+
+- https://openid.net/specs/openid-connect-core-1_0.html
+- https://openid.net/specs/openid-connect-discovery-1_0.html
+- https://openid.net/specs/openid-connect-registration-1_0.html
+
+### Was ist OpenID Connect
+
+- Authentifizierungsframewerk
+- Baut auf OAuth2 auf
+- Familie von Spezifikationen
+
+### Begriffe
+
+- OpenID Provider bzw Identity Provider
+  - erweitert den Authorization Provider aus OAuth2.0 um authentifizierung
+- Relying Party
+  - vergleichbar zum Client in OAuth2.0; die Anwendung, die beim Identity Provider informationen anfragt
+
+### Der neue Authentication Flow
+
+- Es gelten die gleichen Vorbedingungen wie in OAuth2.0
+  - Client/Relying Party muss registriert werden mit Client ID, Client Secret, Redirect URIs, etc.
+- Es gelten alle Schritte wie im Authorization Code Flow in OAuth2.0
+- In OpenID Connect erweitert der Authorization Provider die Access Token Response
+```
+{
+  "access_token":"2YotnFZFEjr1zCsicMWpAA",
+  "expires_in":3600,
+  "refresh_token":"tGzv3JOkF0XG5Qx2TlKWIA",
+  "id_token": "..."
+}
+```
+- Das `id_token` ist jetzt ein JWT, das informationen über die identität des users enthält
+  - Meist alle Registered Claims enthalten (https://datatracker.ietf.org/doc/html/rfc7519#section-4.1)
+  - Weitere Claims können im Identity Provider konfiguriert werden
+    - z.B. in Keycloak in der Nutzerverwaltung können beliebige Claims für User hinterlegt werden, die in JWTs ausgespielt werden
+- Der Client muss die Signatur des JWTs verifizieren
+
+### Scopes
+
+- Im Identity Provider gibt es pro user ein großes, vollständiges Datenset an Claims
+- Beim Anfragen eines Identity Tokens gibt man, welche Scopes man gerne hätte
+- Das Entscheidet, welches Subset an Daten in dem resultierenden JWT enthalten ist
+- Man sollte eher weniger Scopes anfragen und es darauf zuschneiden, was man tatsächlich braucht
+- Scope Namen hängen sehr vom Identity Provider ab und können variieren, obwohl sie die selben Daten enthalten
+
+### JWK - JSON Web Keys bzw JSON Web Key Sets
+
+- JWKs sind ein Austauschformat für Public Keys, die automatisiert heruntergeladen werden können zum verifizieren von Signaturen von z.B. JWTs
+
+### OpenID Connect UserInfo Endpoint
+
+- Benötigt ein Access Token
+- Liefert rohe Userdaten aus
+- Beste Option, wenn man OpenID nur zur Registration verwendet und keine Authorisierung benötigt
+
+### Third Party Initiated Login
+
+- Von außen auf einen Client/eine Anwendung linken und direkt einen Authentifizierungsprozess starten
