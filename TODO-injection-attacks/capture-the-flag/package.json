@@ -1,0 +1,23 @@
+{
+  "name": "security-workshop-ctf",
+  "version": "1.0.0",
+  "description": "",
+  "main": "decryptor.js",
+  "scripts": {
+    "decrypt": "node decryptor.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/strangedev/security-workshop-ctf.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/strangedev/security-workshop-ctf/issues"
+  },
+  "homepage": "https://github.com/strangedev/security-workshop-ctf#readme",
+  "dependencies": {
+    "prompt": "1.3.0"
+  }
+}
