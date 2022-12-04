@@ -6,7 +6,7 @@
     "typescript": "4.9.3"
   },
   "scripts": {
-    "rng": "npx ts-node rng.ts"
+    "rng": "npx ts-node 1-cryptography/rng.ts"
   },
   "dependencies": {
     "@types/jsonwebtoken": "8.5.9",
